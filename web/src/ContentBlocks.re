@@ -6,7 +6,7 @@ let update = (block, ~sync=true, ()) => {
   let now = Js.Date.fromFloat(Js.Date.now());
 
   Db.updateContentBlock({...block, updatedAt: now}, ~sync, ())
-  |> Promises.tapOk(_ =>
+  ->Promise.tapOk(_ =>
        if (sync) {
          Db.touchNote(block.noteId) |> ignore;
        }
@@ -37,5 +37,5 @@ let updateCodeLanguage = (block: Data.contentBlock, language) =>
 let delete = id => Db.deleteContentBlock(id);
 
 DataSync.setContentBlockSyncedListener(block =>
-  Db.updateContentBlock(block, ~sync=false, ()) |> Repromise.map(_ => ())
+  Db.updateContentBlock(block, ~sync=false, ())->Promise.map(_ => ())
 ); /* FIXME: error handling? */

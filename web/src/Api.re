@@ -157,7 +157,7 @@ let headers = () => {
 
 let toResult =
     (mapper: Fetch.Response.t => Js.Promise.t('b), promise)
-    : Repromise.t(Belt.Result.t('b, Js.Promise.error)) =>
+    : Promise.t(Belt.Result.t('b, Js.Promise.error)) =>
   promise
   |> Js.Promise.then_(response =>
        if (!Fetch.Response.ok(response)) {
@@ -169,20 +169,21 @@ let toResult =
        }
      )
   |> Js.Promise.then_(mapper)
-  |> Promises.toResultPromise;
+  |> Promise.Js.fromBsPromise
+  |> Promise.Js.toResult;
 
 let toJsonResult = (mapper: Js.Json.t => 'a, promise) =>
-  promise |> toResult(Fetch.Response.json) |> Promises.mapOk(mapper);
+  (promise |> toResult(Fetch.Response.json))->Promise.mapOk(mapper);
 
 let fetchChanges =
-    (revision: option(string)): Repromise.t(Belt.Result.t(apiResponse, Js.Promise.error)) =>
+    (revision: option(string)): Promise.t(Belt.Result.t(apiResponse, Js.Promise.error)) =>
   Fetch.fetchWithInit(
     fetchUrl(revision),
     Fetch.RequestInit.make(~method_=Get, ~headers=Fetch.HeadersInit.make(headers()), ()),
   )
   |> toJsonResult(JsonCoders.decodeChangesResponse);
 
-let createNote = (note: Data.note): Repromise.t(Belt.Result.t(Data.note, Js.Promise.error)) => {
+let createNote = (note: Data.note): Promise.t(Belt.Result.t(Data.note, Js.Promise.error)) => {
   let json = JsonCoders.encodeNote(note);
 
   Fetch.fetchWithInit(
@@ -228,7 +229,7 @@ let updateNotebook = (notebook: Data.notebook) => {
 };
 
 let deleteNotebook =
-    (notebookId: string): Repromise.t(Belt.Result.t(Fetch.Response.t, Js.Promise.error)) =>
+    (notebookId: string): Promise.t(Belt.Result.t(Fetch.Response.t, Js.Promise.error)) =>
   Fetch.fetchWithInit(
     "/api/notebooks/" ++ notebookId,
     Fetch.RequestInit.make(~method_=Delete, ~headers=Fetch.HeadersInit.make(headers()), ()),

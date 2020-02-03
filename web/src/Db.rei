@@ -4,38 +4,38 @@ type listener = unit => unit;
 let subscribe: listener => unit;
 let unsubscribe: listener => unit;
 
-let addNotebook: Data.notebook => Repromise.t(result(unit));
-let addNote: Data.note => Repromise.t(result(unit));
+let addNotebook: Data.notebook => Promise.t(result(unit));
+let addNote: Data.note => Promise.t(result(unit));
 
-let createNote: string => Repromise.t(result((Data.note, Data.contentBlock)));
-let createNotebook: Data.notebook => Repromise.t(result(Data.notebook));
+let createNote: string => Promise.t(result((Data.note, Data.contentBlock)));
+let createNotebook: Data.notebook => Promise.t(result(Data.notebook));
 
-let getNote: string => Repromise.t(option(Data.note));
-let getNotes: string => Repromise.t(list(Data.note));
+let getNote: string => Promise.t(option(Data.note));
+let getNotes: string => Promise.t(list(Data.note));
 
-let getRecentNotes: (int) => Repromise.t(list(Data.note));
-let getRecentNotesCount: unit => Repromise.t(int);
+let getRecentNotes: (int) => Promise.t(list(Data.note));
+let getRecentNotesCount: unit => Promise.t(int);
 
-let getNotebooks: unit => Repromise.t(list((Data.notebook, int)));
-let getNotebook: string => Repromise.t(option(Data.notebook));
+let getNotebooks: unit => Promise.t(list((Data.notebook, int)));
+let getNotebook: string => Promise.t(option(Data.notebook));
 
-let getContentBlocks: string => Repromise.t(list(Data.contentBlock));
-let getContentBlock: string => Repromise.t(option(Data.contentBlock));
-let addContentBlock: Data.contentBlock => Repromise.t(result(unit));
+let getContentBlocks: string => Promise.t(list(Data.contentBlock));
+let getContentBlock: string => Promise.t(option(Data.contentBlock));
+let addContentBlock: Data.contentBlock => Promise.t(result(unit));
 
-let updateContentBlock: (Data.contentBlock, ~sync: bool=?, unit) => Repromise.t(result(unit));
-let updateNote: (Data.note, ~sync:bool=?, unit) => Repromise.t(result(unit));
-let updateNotebook: (Data.notebook, ~sync:bool=?, unit) => Repromise.t(result(unit));
+let updateContentBlock: (Data.contentBlock, ~sync: bool=?, unit) => Promise.t(result(unit));
+let updateNote: (Data.note, ~sync:bool=?, unit) => Promise.t(result(unit));
+let updateNotebook: (Data.notebook, ~sync:bool=?, unit) => Promise.t(result(unit));
 
-let touchNote: string => Repromise.t(Belt.Result.t(unit, unit));
+let touchNote: string => Promise.t(Belt.Result.t(unit, unit));
 
-let deleteNotebook: (string, ~sync: bool=?, unit) => Repromise.t(result(unit));
-let deleteNote: (string, ~sync: bool=?, unit) => Repromise.t(result(unit));
-let deleteContentBlock: (string) => Repromise.t(result(unit));
+let deleteNotebook: (string, ~sync: bool=?, unit) => Promise.t(result(unit));
+let deleteNote: (string, ~sync: bool=?, unit) => Promise.t(result(unit));
+let deleteContentBlock: (string) => Promise.t(result(unit));
 
 let withNotification: (unit => 'a) => 'a;
-let withPromiseNotification: Repromise.t('a) => unit; 
+let withPromiseNotification: Promise.t('a) => unit;
 
-let insertRevision: string => Repromise.t(unit);
-let getRevision: unit => Repromise.t(option(string));
+let insertRevision: string => Promise.t(unit);
+let getRevision: unit => Promise.t(option(string));
 let clear: unit => unit;

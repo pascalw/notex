@@ -14,36 +14,36 @@ let getPendingChanges = () => {
         let change =
           switch (Js.String.split(":", changeId)) {
           | [|"contentBlock", "updated", id|] =>
-            ContentBlocks.get(id) |> Promises.mapSome(cb => DataSync.ContentBlockUpdated(cb))
+            ContentBlocks.get(id)->Promise.mapSome(cb => DataSync.ContentBlockUpdated(cb))
 
           | [|"contentBlock", "created", id|] =>
-            ContentBlocks.get(id) |> Promises.mapSome(cb => DataSync.ContentBlockCreated(cb))
+            ContentBlocks.get(id)->Promise.mapSome(cb => DataSync.ContentBlockCreated(cb))
 
           | [|"note", "created", id|] =>
-            Notes.get(id) |> Promises.mapSome(note => DataSync.NoteCreated(note))
+            Notes.get(id)->Promise.mapSome(note => DataSync.NoteCreated(note))
 
           | [|"note", "updated", id|] =>
-            Notes.get(id) |> Promises.mapSome(note => DataSync.NoteUpdated(note))
+            Notes.get(id)->Promise.mapSome(note => DataSync.NoteUpdated(note))
 
-          | [|"note", "deleted", id|] => Repromise.resolved(Some(DataSync.NoteDeleted(id)))
+          | [|"note", "deleted", id|] => Promise.resolved(Some(DataSync.NoteDeleted(id)))
 
           | [|"notebook", "created", id|] =>
-            Notebooks.get(id) |> Promises.mapSome(notebook => DataSync.NotebookCreated(notebook))
+            Notebooks.get(id)->Promise.mapSome(notebook => DataSync.NotebookCreated(notebook))
 
           | [|"notebook", "updated", id|] =>
-            Notebooks.get(id) |> Promises.mapSome(notebook => DataSync.NotebookUpdated(notebook))
+            Notebooks.get(id)->Promise.mapSome(notebook => DataSync.NotebookUpdated(notebook))
 
           | [|"notebook", "deleted", id|] =>
-            Repromise.resolved(Some(DataSync.NotebookDeleted(id)))
+            Promise.resolved(Some(DataSync.NotebookDeleted(id)))
 
           | _ =>
             Js.Console.error2("Unknown change id:", changeId);
-            Repromise.resolved(None);
+            Promise.resolved(None);
           };
 
-        Promises.mapSome(change => {DataSync.id: changeId, change}, change);
+        Promise.mapSome(change, change => {DataSync.id: changeId, change});
       },
     );
 
-  promises |> Repromise.all |> Repromise.map(result => Belt.List.keepMap(result, item => item));
+  promises->Promise.all->Promise.map(result => Belt.List.keepMap(result, item => item));
 };

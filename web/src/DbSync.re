@@ -2,7 +2,7 @@ open Belt;
 
 let upsertContentBlock = (contentBlock: Data.contentBlock) =>
   ContentBlocks.get(contentBlock.id)
-  |> Repromise.andThen(storedContentBlock =>
+  ->Promise.flatMap(storedContentBlock =>
        switch (storedContentBlock) {
        | None => ContentBlocks.add(contentBlock)
        | Some(_contentBlock) => ContentBlocks.update(contentBlock, ~sync=false, ())
@@ -11,7 +11,7 @@ let upsertContentBlock = (contentBlock: Data.contentBlock) =>
 
 let upsertNote = (note: Data.note) =>
   Notes.get(note.id)
-  |> Repromise.andThen(storedNote =>
+  ->Promise.flatMap(storedNote =>
        switch (storedNote) {
        | None => Notes.add(note)
        | Some(_note) => Notes.update(note, ~sync=false, ())
@@ -20,7 +20,7 @@ let upsertNote = (note: Data.note) =>
 
 let upsertNotebook = (notebook: Data.notebook) =>
   Notebooks.get(notebook.id)
-  |> Repromise.andThen(storedNotebook =>
+  ->Promise.flatMap(storedNotebook =>
        switch (storedNotebook) {
        | None => Notebooks.add(notebook)
        | Some(_note) => Notebooks.update(notebook, ~sync=false, ())
@@ -29,8 +29,8 @@ let upsertNotebook = (notebook: Data.notebook) =>
 
 let run = () =>
   Db.getRevision()
-  |> Repromise.andThen(Api.fetchChanges)
-  |> Repromise.wait((result: Belt.Result.t(Api.apiResponse, _)) =>
+  ->Promise.flatMap(Api.fetchChanges)
+  ->Promise.get((result: Belt.Result.t(Api.apiResponse, _)) =>
        switch (result) {
        | Result.Ok(result) =>
          let revision = result.revision;
@@ -51,7 +51,7 @@ let run = () =>
              );
 
          let promise =
-           Repromise.all(
+           Promise.all(
              List.concatMany([|
                notebookResults,
                noteResults,

@@ -21,7 +21,7 @@ let make =
 
     let promise =
       Notebooks.create(notebook)
-      |> Promises.tapOk(_ => {
+      ->Promise.tapOk(_ => {
            let collection = UiTypes.NoteCollection.fromNotebook(notebook);
            dispatch(NoteManagementContainer.SelectNotebook(collection));
            send(EditTitle(Some(notebook.id)));

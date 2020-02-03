@@ -71,7 +71,7 @@ let make = (~onLoggedIn, _children) => {
 
       let password = passwordInputValue(self.state);
       Auth.checkToken(Api.checkAuth, password)
-      |> Repromise.wait(result =>
+      ->Promise.get(result =>
            switch (result) {
            | Belt.Result.Ok(_) =>
              self.send(Proceed(AuthSuccesful));

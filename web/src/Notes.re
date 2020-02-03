@@ -11,5 +11,5 @@ let update = (note: Data.note, ~sync=true, ()) => {
 let delete = (noteId: string, ~sync=true, ()) => Db.deleteNote(noteId, ~sync, ());
 
 DataSync.setNoteSyncedListener(note =>
-  Db.updateNote(note, ~sync=false, ()) |> Repromise.map(_ => ())
+  Db.updateNote(note, ~sync=false, ())->Promise.map(_ => ())
 ); /* FIXME: error handling? */

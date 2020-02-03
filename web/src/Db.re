@@ -130,37 +130,40 @@ let initDb = () => {
       DbMigrations.runMigrations(upgradeDb, oldVersion, currentVersion);
     },
   )
-  |> Promises.toResultPromise;
+  ->Promise.Js.fromBsPromise
+  ->Promise.Js.toResult;
 };
 
 let dbPromise = () =>
   switch (iDb^) {
   | None =>
     initDb()
-    |> Repromise.map(result => {
+    ->Promise.map(result => {
          let db = Belt.Result.getExn(result);
 
          iDb := Some(db);
          db;
        })
-  | Some(db) => Repromise.resolved(db)
+  | Some(db) => Promise.resolved(db)
   };
 
 let toOptionPromise = (jsPromise: Js.Promise.t(option('a))) =>
   jsPromise
-  |> Repromise.Rejectable.fromJsPromise
-  |> Repromise.Rejectable.map(
+  ->Promise.Js.fromBsPromise
+  ->Promise.Js.map(
        fun
        | None => None
        | Some(value) => Some(value),
      )
-  |> Repromise.Rejectable.catch(error => {
+  ->Promise.Js.catch(error => {
        Js.Console.error2("Db promise failed: ", error);
-       Repromise.resolved(None);
+       Promise.resolved(None);
      });
 
 let awaitTransactionPromise = (transaction: IndexedDB.Transaction.t) =>
-  IndexedDB.Transaction.complete(transaction)->Promises.toResultPromise;
+  IndexedDB.Transaction.complete(transaction)
+  ->Promise.Js.fromBsPromise
+  ->Promise.Js.toResult;
 
 let listeners: ref(list(listener)) = ref([]);
 
@@ -170,14 +173,15 @@ let unsubscribe = listener => listeners := Belt.List.keep(listeners^, l => l !==
 
 let getNotes = (notebookId: string) =>
   dbPromise()
-  |> Repromise.andThen(db =>
+  ->Promise.flatMap(db =>
        IndexedDB.(
          DB.transaction(db, notesStore, Transaction.ReadOnly)
          ->Transaction.objectStore(notesStore)
          ->ObjectStore.index("forNotebook")
          ->IndexedDB.Index.getAllByKey(notebookId)
-         ->Promises.toResultPromise
-         |> Repromise.map(
+         ->Promise.Js.fromBsPromise
+         ->Promise.Js.toResult
+         ->Promise.map(
               fun
               | Ok(array) => array->Belt.List.fromArray->Belt.List.map(JsonCoders.decodeNote)
               | Error(_) => [],
@@ -187,15 +191,16 @@ let getNotes = (notebookId: string) =>
 
 let getRecentNotes = limit =>
   dbPromise()
-  |> Repromise.andThen(db =>
+  ->Promise.flatMap(db =>
        IndexedDB.(
-         DB.transaction(db, notesStore, Transaction.ReadOnly)
+         (DB.transaction(db, notesStore, Transaction.ReadOnly)
          ->Transaction.objectStore(notesStore)
          ->ObjectStore.index("byUpdatedAt")
          ->IndexedDB.Index.openCursor(Cursor.Prev)
-         |> Js.Promise.then_(Cursor.take(_, limit, [||]))
-         |> Promises.toResultPromise
-         |> Repromise.map(
+         |> Js.Promise.then_(Cursor.take(_, limit, [||])))
+         ->Promise.Js.fromBsPromise
+         ->Promise.Js.toResult
+         ->Promise.map(
               fun
               | Ok(array) => array->Belt.List.fromArray->Belt.List.map(JsonCoders.decodeNote)
               | Error(_) => [],
@@ -205,85 +210,89 @@ let getRecentNotes = limit =>
 
 let getRecentNotesCount = () =>
   dbPromise()
-  |> Repromise.andThen(db =>
+  ->Promise.flatMap(db =>
        IndexedDB.(
          DB.transaction(db, notesStore, Transaction.ReadOnly)
          ->Transaction.objectStore(notesStore)
          ->ObjectStore.index("byUpdatedAt")
          ->IndexedDB.Index.count
-         ->Promises.toResultPromise
-         |> Repromise.map(Belt.Result.getWithDefault(_, 0))
+         ->Promise.Js.fromBsPromise
+         ->Promise.Js.toResult
+         ->Promise.map(Belt.Result.getWithDefault(_, 0))
        )
      );
 
 let countNotes = (notebookId: string) =>
   dbPromise()
-  |> Repromise.andThen(db =>
+  ->Promise.flatMap(db =>
        IndexedDB.(
          DB.transaction(db, notesStore, Transaction.ReadOnly)
          ->Transaction.objectStore(notesStore)
          ->ObjectStore.index("forNotebook")
          ->IndexedDB.Index.countByKey(notebookId)
-         ->Promises.toResultPromise
-         |> Repromise.map(Belt.Result.getWithDefault(_, 0))
+         ->Promise.Js.fromBsPromise
+         ->Promise.Js.toResult
+         ->Promise.map(Belt.Result.getWithDefault(_, 0))
        )
      );
 
 let getNote = (noteId: string) =>
   dbPromise()
-  |> Repromise.andThen(db =>
+  ->Promise.flatMap(db =>
        IndexedDB.(
          DB.transaction(db, notesStore, Transaction.ReadOnly)
          ->Transaction.objectStore(notesStore)
          ->ObjectStore.get(noteId)
          ->toOptionPromise
-         |> Repromise.map(v => Belt.Option.map(v, JsonCoders.decodeNote))
+         ->Promise.map(v => Belt.Option.map(v, JsonCoders.decodeNote))
        )
      );
 
 let getNotebooks = () =>
   dbPromise()
-  |> Repromise.andThen(db =>
+  ->Promise.flatMap(db =>
        IndexedDB.(
          DB.transaction(db, notebooksStore, Transaction.ReadOnly)
          ->Transaction.objectStore(notebooksStore)
          ->ObjectStore.getAll
-         ->Promises.toResultPromise
-         |> Repromise.andThen(
+         ->Promise.Js.fromBsPromise
+         ->Promise.Js.toResult
+         ->Promise.flatMap(
               fun
               | Ok(array) =>
                 array
                 ->Belt.List.fromArray
                 ->Belt.List.map(JsonCoders.decodeNotebook)
-                ->Belt.List.map(n => countNotes(n.id) |> Repromise.map(count => (n, count)))
-                ->Repromise.all
-              | Error(_) => Repromise.resolved([]),
+                ->Belt.List.map(n => countNotes(n.id)->Promise.map(count => (n, count)))
+                ->Promise.all
+              | Error(_) => Promise.resolved([]),
             )
        )
      );
 
 let getNotebook = (notebookId: string) =>
   dbPromise()
-  |> Repromise.andThen(db =>
+  ->Promise.flatMap(db =>
        IndexedDB.(
          DB.transaction(db, notebooksStore, Transaction.ReadOnly)
          ->Transaction.objectStore(notebooksStore)
          ->ObjectStore.get(notebookId)
          ->toOptionPromise
-         |> Repromise.map(v => Belt.Option.map(v, JsonCoders.decodeNotebook))
+         ->Promise.map(v => Belt.Option.map(v, JsonCoders.decodeNotebook))
        )
      );
 
 let getContentBlocks = noteId =>
   dbPromise()
-  |> Repromise.andThen(db =>
+  ->Promise.flatMap(db =>
        IndexedDB.(
          DB.transaction(db, contentBlocksStore, Transaction.ReadOnly)
          ->Transaction.objectStore(contentBlocksStore)
          ->ObjectStore.index("forNote")
          ->IndexedDB.Index.getAllByKey(noteId)
-         ->Promises.toResultPromise
-         |> Repromise.map(
+         ->Promise.Js.fromBsPromise
+         ->Promise.Js.toResult
+         ->Promise.map(
               fun
               | Ok(array) =>
                 array->Belt.List.fromArray->Belt.List.map(JsonCoders.decodeContentBlock)
@@ -294,20 +303,20 @@ let getContentBlocks = noteId =>
 
 let getContentBlock = blockId =>
   dbPromise()
-  |> Repromise.andThen(db =>
+  ->Promise.flatMap(db =>
        IndexedDB.(
          DB.transaction(db, contentBlocksStore, Transaction.ReadOnly)
          ->Transaction.objectStore(contentBlocksStore)
          ->ObjectStore.get(blockId)
          ->toOptionPromise
-         |> Repromise.map(v => Belt.Option.map(v, JsonCoders.decodeContentBlock))
+         ->Promise.map(v => Belt.Option.map(v, JsonCoders.decodeContentBlock))
        )
      );
 
 let addNotebook = notebook =>
   IndexedDB.(
     dbPromise()
-    |> Repromise.andThen(db => {
+    ->Promise.flatMap(db => {
          let tx = DB.transaction(db, notebooksStore, Transaction.ReadWrite);
          let data = JsonCoders.encodeNotebook(notebook);
 
@@ -320,7 +329,7 @@ let addNotebook = notebook =>
 let addNote = note =>
   IndexedDB.(
     dbPromise()
-    |> Repromise.andThen(db => {
+    ->Promise.flatMap(db => {
          let tx = DB.transaction(db, notesStore, Transaction.ReadWrite);
          let data = JsonCoders.encodeNote(note);
 
@@ -333,7 +342,7 @@ let addNote = note =>
 let addContentBlock = block =>
   IndexedDB.(
     dbPromise()
-    |> Repromise.andThen(db => {
+    ->Promise.flatMap(db => {
          let tx = DB.transaction(db, contentBlocksStore, Transaction.ReadWrite);
          let data = JsonCoders.encodeContentBlock(block);
 
@@ -365,8 +374,8 @@ let createNote = (notebookId: string) => {
     revision: None,
   };
 
-  Repromise.all([addNote(note), addContentBlock(contentBlock)])
-  |> Repromise.map(_ => {
+  Promise.all([addNote(note), addContentBlock(contentBlock)])
+  ->Promise.map(_ => {
        /* FIXME: only push when succesful */
        DataSync.pushNewNote(note);
        DataSync.pushNewContentBlock(contentBlock);
@@ -377,7 +386,7 @@ let createNote = (notebookId: string) => {
 
 let createNotebook = notebook =>
   addNotebook(notebook)
-  |> Repromise.map(_result => {
+  ->Promise.map(_result => {
        /* FIXME: only push when create is succesfull */
        DataSync.pushNewNotebook(notebook) |> ignore;
        Ok(notebook);
@@ -385,7 +394,7 @@ let createNotebook = notebook =>
 
 let updateContentBlock = (contentBlock: Data.contentBlock, ~sync=true, ()) =>
   addContentBlock(contentBlock)
-  |> Repromise.map(result => {
+  ->Promise.map(result => {
        /* FIXME: only push when create is succesfull */
        if (sync) {
          DataSync.pushContentBlock(contentBlock);
@@ -396,7 +405,7 @@ let updateContentBlock = (contentBlock: Data.contentBlock, ~sync=true, ()) =>
 
 let updateNote = (note: Data.note, ~sync=true, ()) =>
   addNote(note)
-  |> Repromise.map(result => {
+  ->Promise.map(result => {
        /* FIXME: only push when create is succesfull */
        if (sync) {
          DataSync.pushNoteChange(note);
@@ -407,7 +416,7 @@ let updateNote = (note: Data.note, ~sync=true, ()) =>
 
 let updateNotebook = (notebook: Data.notebook, ~sync=true, ()) =>
   addNotebook(notebook)
-  |> Repromise.map(result => {
+  ->Promise.map(result => {
        /* FIXME: only push when create is succesfull */
        if (sync) {
          DataSync.pushNotebookChange(notebook);
@@ -418,15 +427,16 @@ let updateNotebook = (notebook: Data.notebook, ~sync=true, ()) =>
 
 let deleteNotebook = (notebookId: string, ~sync=true, ()) =>
   dbPromise()
-  |> Repromise.andThen(db => {
+  ->Promise.flatMap(db => {
        open IndexedDB;
        let tx = DB.transaction(db, notebooksStore, Transaction.ReadWrite);
 
        Transaction.objectStore(tx, notebooksStore)
        ->ObjectStore.delete(notebookId)
-       ->Promises.toResultPromise;
+       ->Promise.Js.fromBsPromise
+       ->Promise.Js.toResult
      })
-  |> Repromise.map(_result => {
+  ->Promise.map(_result => {
        /* FIXME: only push when succesfull */
        if (sync) {
          DataSync.pushNotebookDelete(notebookId);
@@ -437,15 +447,16 @@ let deleteNotebook = (notebookId: string, ~sync=true, ()) =>
 
 let deleteNote = (noteId: string, ~sync=true, ()) =>
   dbPromise()
-  |> Repromise.andThen(db => {
+  ->Promise.flatMap(db => {
        open IndexedDB;
        let tx = DB.transaction(db, notesStore, Transaction.ReadWrite);
 
        Transaction.objectStore(tx, notesStore)
        ->ObjectStore.delete(noteId)
-       ->Promises.toResultPromise;
+       ->Promise.Js.fromBsPromise
+       ->Promise.Js.toResult
      })
-  |> Repromise.map(_result => {
+  ->Promise.map(_result => {
        /* FIXME: only push when succesfull */
        if (sync) {
          DataSync.pushNoteDelete(noteId);
@@ -456,22 +467,23 @@ let deleteNote = (noteId: string, ~sync=true, ()) =>
 
 let deleteContentBlock = (contentBlockId: string) =>
   dbPromise()
-  |> Repromise.andThen(db => {
+  ->Promise.flatMap(db => {
        open IndexedDB;
        let tx = DB.transaction(db, contentBlocksStore, Transaction.ReadWrite);
 
        Transaction.objectStore(tx, contentBlocksStore)
        ->ObjectStore.delete(contentBlockId)
-       ->Promises.toResultPromise;
+       ->Promise.Js.fromBsPromise
+       ->Promise.Js.toResult
      })
-  |> Repromise.map(_result
+  ->Promise.map(_result
        /* FIXME: only push when succesfull */
        => Ok());
 
 let insertRevision = (revision: string) =>
-  LocalStorage.setItem("pragma-revision", revision)->Repromise.resolved;
+  LocalStorage.setItem("pragma-revision", revision)->Promise.resolved;
 
-let getRevision = () => LocalStorage.getItem("pragma-revision")->Repromise.resolved;
+let getRevision = () => LocalStorage.getItem("pragma-revision")->Promise.resolved;
 
 let withNotification = fn => {
   let result = fn();
@@ -481,7 +493,7 @@ let withNotification = fn => {
 };
 
 let withPromiseNotification = promise =>
-  promise |> Repromise.wait(_ => Belt.List.forEach(listeners^, l => l()));
+  promise->Promise.get(_ => Belt.List.forEach(listeners^, l => l()));
 
 let clear = () => {
   IndexedDB.delete("pragma") |> ignore;
@@ -492,11 +504,11 @@ let touchNote = noteId => {
   let now = Js.Date.fromFloat(Js.Date.now());
 
   getNote(noteId)
-  |> Promises.mapSome((note: Data.note) => {...note, updatedAt: now})
-  |> Repromise.andThen(maybeNote =>
+  ->Promise.mapSome((note: Data.note) => {...note, updatedAt: now})
+  ->Promise.flatMap(maybeNote =>
        switch (maybeNote) {
-       | None => Repromise.resolved(Belt.Result.Error())
-       | Some(note) => updateNote(note, ()) |> Repromise.map(Results.mapError(_, _ => ()))
+       | None => Promise.resolved(Belt.Result.Error())
+       | Some(note) => updateNote(note, ())->Promise.map(Results.mapError(_, _ => ()))
        }
      );
 };

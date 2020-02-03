@@ -7,7 +7,7 @@
     "bs-webapi",
     "bs-fetch",
     "@glennsl/bs-json",
-    "@aantron/repromise"
+    "reason-promise"
   ],
   "reason": {
     "react-jsx": 2

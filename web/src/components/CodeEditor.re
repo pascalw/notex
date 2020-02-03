@@ -145,8 +145,9 @@ module CodeMirrorWrapper = {
     let mode = SupportedLanguageMap.getExn(supportedLanguages, language);
 
     mode.install()
-    |> Promises.toResultPromise
-    |> Promises.tapOk(_ => CodeMirror.Editor.setOption(editor, "mode", mapMode(language)));
+    ->Promise.Js.fromBsPromise
+    ->Promise.Js.toResult
+    ->Promise.tapOk(_ => CodeMirror.Editor.setOption(editor, "mode", mapMode(language)));
   };
 
   let component = ReasonReact.reducerComponent("CodeMirrorWrapper");

@@ -79,17 +79,17 @@ let sortNotebooksDesc = (notebooks: list((Data.notebook, int))) =>
   sortDesc(notebooks, ((notebook, _)) => notebook.updatedAt);
 
 let getSortedNotes = notebookId =>
-  Notes.fromNotebook(notebookId) |> Repromise.map(sortNotesDesc);
+  Notes.fromNotebook(notebookId)->Promise.map(sortNotesDesc);
 
 let fetchAllData = () => {
   open Belt;
   let appState = AppState.get();
 
   Notebooks.all()
-  |> Repromise.map(sortNotebooksDesc)
-  |> Repromise.andThen((notebooks: list((Data.notebook, int))) =>
+  ->Promise.map(sortNotebooksDesc)
+  ->Promise.flatMap((notebooks: list((Data.notebook, int))) =>
        Db.getRecentNotesCount()
-       |> Repromise.map(count => {
+       ->Promise.map(count => {
             let count = count > maxRecentNotes ? maxRecentNotes : count;
             let collection =
               NoteCollection.makeCollection(NoteCollection.CollectionKind.Recents, count);
@@ -97,7 +97,7 @@ let fetchAllData = () => {
             (notebooks, [collection]);
           })
      )
-  |> Repromise.andThen(((notebooks: list((Data.notebook, int)), noteCollections)) => {
+  ->Promise.flatMap(((notebooks: list((Data.notebook, int)), noteCollections)) => {
        let firstNotebookId =
          List.head(notebooks)->Belt.Option.map(((notebook, _)) => notebook.id);
        let selectedCollectionId = Utils.Option.or_(appState.selectedNotebookId, firstNotebookId);
@@ -107,14 +107,14 @@ let fetchAllData = () => {
        switch (selectedCollection) {
        | Some(NoteCollection.Notebook(notebook)) =>
          getSortedNotes(notebook.id)
-         |> Repromise.map(notes => (notebooks, selectedCollectionId, notes, noteCollections))
+         ->Promise.map(notes => (notebooks, selectedCollectionId, notes, noteCollections))
        | Some(NoteCollection.Collection({kind: NoteCollection.CollectionKind.Recents})) =>
          Db.getRecentNotes(maxRecentNotes)
-         |> Repromise.map(notes => (notebooks, selectedCollectionId, notes, noteCollections))
-       | None => Repromise.resolved((notebooks, None, [], noteCollections))
+         ->Promise.map(notes => (notebooks, selectedCollectionId, notes, noteCollections))
+       | None => Promise.resolved((notebooks, None, [], noteCollections))
        };
      })
-  |> Repromise.andThen(
+  ->Promise.flatMap(
        ((notebooksWithCounts, selectedCollection, notes: list(Data.note), noteCollections)) => {
        let selectedNoteId =
          switch (appState.selectedNoteId) {
@@ -124,12 +124,12 @@ let fetchAllData = () => {
 
        let contentBlocksPromise =
          switch (selectedNoteId) {
-         | None => Repromise.resolved([])
+         | None => Promise.resolved([])
          | Some(noteId) => ContentBlocks.fromNote(noteId)
          };
 
        contentBlocksPromise
-       |> Repromise.map(contentBlocks =>
+       ->Promise.map(contentBlocks =>
             {
               initialStateLoaded: true,
               notebooks: notebooksWithCounts,
@@ -145,7 +145,7 @@ let fetchAllData = () => {
 
 let selectFirstNote = notes =>
   notes
-  |> Repromise.map((notes: list(Data.note)) => {
+  ->Promise.map((notes: list(Data.note)) => {
        let selectedNoteId = Belt.List.head(notes)->Belt.Option.map(note => note.id);
        (notes, selectedNoteId);
      });
@@ -168,7 +168,7 @@ let make = (children: (state, action => unit) => ReasonReact.reactElement) => {
     switch (action) {
     | ReloadState =>
       ReasonReact.SideEffects(
-        self => fetchAllData() |> Repromise.wait(state => self.send(LoadState(state))),
+        self => fetchAllData()->Promise.get(state => self.send(LoadState(state))),
       )
     | LoadState(state) => ReasonReact.Update(state)
     | SelectNotebook(
@@ -177,9 +177,9 @@ let make = (children: (state, action => unit) => ReasonReact.reactElement) => {
       ReasonReact.UpdateWithSideEffects(
         {...state, selectedCollection: Some(NoteCollection.Collection.id(collection))},
         self =>
-          Db.getRecentNotes(maxRecentNotes)
-          |> selectFirstNote
-          |> Repromise.wait(((notes, selectedNoteId)) => {
+          (Db.getRecentNotes(maxRecentNotes)
+          |> selectFirstNote)
+          ->Promise.get(((notes, selectedNoteId)) => {
                self.send(NotebookSelected(notes, selectedNoteId));
 
                switch (selectedNoteId) {
@@ -193,7 +193,7 @@ let make = (children: (state, action => unit) => ReasonReact.reactElement) => {
         {...state, selectedCollection: Some(notebook.id)},
         self =>
           getNotes(notebook.id)
-          |> Repromise.wait(((notes, selectedNoteId)) => {
+          ->Promise.get(((notes, selectedNoteId)) => {
                self.send(NotebookSelected(notes, selectedNoteId));
 
                switch (selectedNoteId) {
@@ -212,9 +212,9 @@ let make = (children: (state, action => unit) => ReasonReact.reactElement) => {
         newState,
         self =>
           Db.withNotification(() => Notebooks.create(notebook))
-          |> Promises.mapOk(NoteCollection.fromNotebook)
-          |> Promises.mapOk(collection => self.send(SelectNotebook(collection)))
-          |> ignore,
+          ->Promise.mapOk(NoteCollection.fromNotebook)
+          ->Promise.mapOk(collection => self.send(SelectNotebook(collection)))
+          ->ignore,
       );
     | DeleteNotebook(notebook) =>
       let updatedNotebooks =
@@ -248,7 +248,7 @@ let make = (children: (state, action => unit) => ReasonReact.reactElement) => {
         {...state, selectedNote: Some(noteId)},
         self =>
           ContentBlocks.fromNote(noteId)
-          |> Repromise.wait(contentBlocks => self.send(NoteSelected(noteId, contentBlocks))),
+          ->Promise.get(contentBlocks => self.send(NoteSelected(noteId, contentBlocks))),
       )
     | NoteSelected(noteId, contentBlocks) =>
       ReasonReact.Update({...state, selectedNote: Some(noteId), contentBlocks})
@@ -256,12 +256,12 @@ let make = (children: (state, action => unit) => ReasonReact.reactElement) => {
       ReasonReact.SideEffects(
         self =>
           Notes.create(self.state.selectedCollection |> Belt.Option.getExn)
-          |> Promises.tapOk(((note: Data.note, _contentBlock)) => {
+          ->Promise.tapOk(((note: Data.note, _contentBlock)) => {
                AppState.setSelected(self.state.selectedCollection, Some(note.id));
 
-               fetchAllData() |> Repromise.wait(state => self.send(LoadState(state)));
+               fetchAllData()->Promise.get(state => self.send(LoadState(state)));
              })
-          |> ignore,
+          ->ignore,
       )
     | DeleteNote(note) =>
       let updatedNotes = Belt.List.keep(state.notes, existingNote => existingNote.id != note.id);
@@ -327,7 +327,7 @@ let make = (children: (state, action => unit) => ReasonReact.reactElement) => {
     };
 
     serverSync();
-    DataSyncRetry.getPendingChanges() |> Repromise.wait(DataSync.start);
+    DataSyncRetry.getPendingChanges()->Promise.get(DataSync.start);
 
     let loadStateFromDb = () => self.send(ReloadState);
     loadStateFromDb();

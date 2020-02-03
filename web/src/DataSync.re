@@ -16,7 +16,7 @@ type change = {
 let pendingChanges: ref(list(change)) = ref([]);
 let retryQueue: ref(list(change)) = ref([]);
 
-type syncedListener('a) = 'a => Repromise.t(unit);
+type syncedListener('a) = 'a => Promise.t(unit);
 
 let noteSyncedListener: ref(option(syncedListener(Data.note))) = ref(None);
 let notebookSyncedListener: ref(option(syncedListener(Data.notebook))) = ref(None);
@@ -31,11 +31,11 @@ let setContentBlockSyncedListener = listener => contentBlockSyncedListener := So
 let notifyListener = (listener, resource) =>
   (
     switch (listener^) {
-    | None => Repromise.resolved()
+    | None => Promise.resolved()
     | Some(listener) => listener(resource)
     }
   )
-  |> Repromise.map(v => Belt.Result.Ok(v));
+  ->Promise.map(v => Belt.Result.Ok(v));
 
 let notifyNoteSyncedListener = notifyListener(noteSyncedListener);
 let notifyNotebookSyncedListener = notifyListener(notebookSyncedListener);
@@ -62,18 +62,18 @@ let notifyPendingChangesListener = pendingChanges => {
 
 let syncChange = change =>
   switch (change.change) {
-  | NoteCreated(note) => Api.createNote(note) |> Promises.flatMapOk(notifyNoteSyncedListener)
-  | NoteUpdated(note) => Api.updateNote(note) |> Promises.flatMapOk(notifyNoteSyncedListener)
+  | NoteCreated(note) => Api.createNote(note)->Promise.flatMapOk(notifyNoteSyncedListener)
+  | NoteUpdated(note) => Api.updateNote(note)->Promise.flatMapOk(notifyNoteSyncedListener)
   | ContentBlockCreated(contentBlock) =>
-    Api.createContentBlock(contentBlock) |> Promises.flatMapOk(notifyContentBlockSyncedListener)
+    Api.createContentBlock(contentBlock)->Promise.flatMapOk(notifyContentBlockSyncedListener)
   | ContentBlockUpdated(contentBlock) =>
-    Api.updateContentBlock(contentBlock) |> Promises.flatMapOk(notifyContentBlockSyncedListener)
+    Api.updateContentBlock(contentBlock)->Promise.flatMapOk(notifyContentBlockSyncedListener)
   | NotebookCreated(notebook) =>
-    Api.createNotebook(notebook) |> Promises.flatMapOk(notifyNotebookSyncedListener)
+    Api.createNotebook(notebook)->Promise.flatMapOk(notifyNotebookSyncedListener)
   | NotebookUpdated(notebook) =>
-    Api.updateNotebook(notebook) |> Promises.flatMapOk(notifyNotebookSyncedListener)
-  | NotebookDeleted(notebookId) => Api.deleteNotebook(notebookId) |> Promises.mapOk(ignore)
-  | NoteDeleted(noteId) => Api.deleteNote(noteId) |> Promises.mapOk(ignore)
+    Api.updateNotebook(notebook)->Promise.flatMapOk(notifyNotebookSyncedListener)
+  | NotebookDeleted(notebookId) => Api.deleteNotebook(notebookId)->Promise.mapOk(ignore)
+  | NoteDeleted(noteId) => Api.deleteNote(noteId)->Promise.mapOk(ignore)
   };
 
 let storePendingChanges = () => {
@@ -163,7 +163,7 @@ let rec syncPendingChanges = onComplete => {
   switch (nextChange) {
   | Some([change]) =>
     syncChange(change)
-    |> Repromise.wait(result => {
+    ->Promise.get(result => {
          if (Belt.Result.isError(result)) {
            Js.Console.error2("Error syncing: ", result);
            pushChangeToQueue(retryQueue, change);
